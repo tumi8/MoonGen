@@ -8,6 +8,7 @@ local pipe                = require "pipe"
 local launch_timestamp    = require "launch-timestamp"
 local ffi                 = require "ffi"
 local log                 = require "log"
+local dpdkc               = require "dpdkc"
 
 function configure(parser)
 	parser:description("Path property emulation (delay, packet loss, rate).")
@@ -199,6 +200,12 @@ function master(args)
 	local dev2 = device.config({port = args.dev2, rxQueues = args.threads, txQueues = args.threads, txDescs = descriptorCount, rxDescs = descriptorCount, numBufs = buf_count_dev2, rssQueues = args.threads})
 	device.waitForLinks()
 
+	-- start temperature recording
+	mg.startTask("tempSlave", dev1)
+	if args.dev1 ~= args.dev2 then
+		mg.startTask("tempSlave", dev2)
+	end
+
 	-- initialize timestamping when using hardware based latency emulation
 	if args.hardware then
 		dev1:enableRxTimestampsAllPackets()
@@ -306,4 +313,8 @@ end
 
 function sw_tx_loop(queue, packet_ring, args, txQueue)
 	ffi.C.sw_transmitter_loop_delay(queue.dev.id, queue.qid, packet_ring.ring, args.config_struct[0])
+end
+
+function tempSlave(dev)
+	dpdkc.record_temperature(dev.id)
 end
